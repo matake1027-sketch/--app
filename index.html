@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>掛け算トレーニング</title>
+  <style>
+    body { font-family: sans-serif; text-align: center; }
+    input { width: 80px; font-size: 18px; }
+    button { margin: 5px; }
+    li.correct { color: green; }
+    li.wrong { color: red; }
+    .hidden { display: none; }
+    ul { text-align: left; max-width: 600px; margin: auto; }
+  </style>
+</head>
+<body>
+
+<h1>掛け算トレーニング</h1>
+
+<!-- メインページ -->
+<div id="mainPage">
+
+  <div id="setting">
+    制限時間：
+    <input type="number" id="min" value="1"> 分
+    <input type="number" id="sec" value="0"> 秒
+    <br><br>
+    <button onclick="start()">スタート</button>
+    <button onclick="showHistory()">履歴を見る</button>
+  </div>
+
+  <hr>
+
+  <h2 id="timerDisplay">残り時間：--:--</h2>
+  <h2 id="question">問題</h2>
+
+  <input type="number" id="answer" disabled>
+  <button id="btn" onclick="check()" disabled>決定</button>
+
+  <hr>
+
+  <h2>今回の結果</h2>
+  <p id="summary"></p>
+  <button onclick="resetApp()" id="resetBtn" disabled>最初に戻る</button>
+
+  <ul id="log"></ul>
+</div>
+
+<!-- 履歴ページ -->
+<div id="historyPage" class="hidden">
+  <h2>履歴一覧</h2>
+  <ul id="historyList"></ul>
+  <button onclick="backToMain()">戻る</button>
+</div>
+
+<script>
+let a, b, correctAnswer;
+let total, correct, startTime, timeLimit;
+let intervalId;
+let logs = [];
+
+// DOM参照
+const timerDisplay = document.getElementById("timerDisplay");
+
+// 出題
+function randomQuestion() {
+  a = Math.floor(Math.random() * 41) + 10;
+  b = Math.floor(Math.random() * 9) + 1;
+  correctAnswer = a * b;
+  question.textContent = `問題：${a} × ${b}`;
+  answer.value = "";
+  answer.focus();
+}
+
+// スタート
+function start() {
+  timeLimit = Number(min.value) * 60 + Number(sec.value);
+  if (timeLimit <= 0) return;
+
+  setting.style.display = "none";
+  answer.disabled = false;
+  btn.disabled = false;
+  resetBtn.disabled = true;
+  summary.textContent = "";
+  log.innerHTML = "";
+
+  total = 0;
+  correct = 0;
+  logs = [];
+  startTime = Date.now();
+
+  randomQuestion();
+  intervalId = setInterval(updateTimer, 1000);
+}
+
+// タイマー更新
+function updateTimer() {
+  const elapsed = Math.floor((Date.now() - startTime) / 1000);
+  const remain = timeLimit - elapsed;
+
+  if (remain <= 0) {
+    end();
+    return;
+  }
+
+  timerDisplay.textContent =
+    `残り時間：${String(Math.floor(remain / 60)).padStart(2, "0")}:` +
+    `${String(remain % 60).padStart(2, "0")}`;
+}
+
+// 回答
+function check() {
+  if (answer.value === "") return;
+
+  const ans = Number(answer.value);
+  total++;
+
+  const elapsed = Math.floor((Date.now() - startTime) / 1000);
+  const mm = Math.floor(elapsed / 60);
+  const ss = elapsed % 60;
+
+  const ok = ans === correctAnswer;
+  if (ok) correct++;
+
+  logs.push({
+    time: `${mm}分${ss}秒`,
+    q: `${a}×${b}`,
+    ans,
+    correct: correctAnswer,
+    ok
+  });
+
+  randomQuestion();
+}
+
+// 終了
+function end() {
+  clearInterval(intervalId);
+  answer.disabled = true;
+  btn.disabled = true;
+  resetBtn.disabled = false;
+  timerDisplay.textContent = "終了";
+
+  const elapsed = Math.floor((Date.now() - startTime) / 1000);
+  summary.textContent =
+    `${Math.floor(elapsed / 60)}分${elapsed % 60}秒で ` +
+    `${total}問 解答（正解：${correct}問）`;
+
+  logs.forEach(l => {
+    const li = document.createElement("li");
+    li.textContent =
+      `${l.time}：${l.q}＝${l.ans} ` +
+      (l.ok ? "（正解）" : `（不正解：${l.correct}）`);
+    li.className = l.ok ? "correct" : "wrong";
+    log.appendChild(li);
+  });
+
+  saveHistory(elapsed);
+}
+
+// 履歴保存
+function saveHistory(time) {
+  const history = JSON.parse(localStorage.getItem("kakezanHistory") || "[]");
+  history.unshift({
+    date: new Date().toLocaleString(),
+    time: `${Math.floor(time / 60)}分${time % 60}秒`,
+    total,
+    correct,
+    logs
+  });
+  localStorage.setItem("kakezanHistory", JSON.stringify(history));
+}
+
+// 履歴表示
+function showHistory() {
+  mainPage.classList.add("hidden");
+  historyPage.classList.remove("hidden");
+  historyList.innerHTML = "";
+
+  const history = JSON.parse(localStorage.getItem("kakezanHistory") || "[]");
+  history.forEach(h => {
+    const li = document.createElement("li");
+    li.innerHTML =
+      `<strong>${h.date}</strong><br>
+       ${h.time}／${h.total}問中${h.correct}問正解
+       <ul>` +
+       h.logs.map(l =>
+         `<li class="${l.ok ? "correct" : "wrong"}">
+          ${l.time}：${l.q}＝${l.ans} ` +
+          (l.ok ? "（正解）" : `（不正解：${l.correct}）`) +
+         `</li>`
+       ).join("") +
+      `</ul>`;
+    historyList.appendChild(li);
+  });
+}
+
+// 戻る
+function backToMain() {
+  historyPage.classList.add("hidden");
+  mainPage.classList.remove("hidden");
+}
+
+// リセット
+function resetApp() {
+  clearInterval(intervalId);
+  setting.style.display = "block";
+  timerDisplay.textContent = "残り時間：--:--";
+  question.textContent = "問題";
+  answer.value = "";
+  summary.textContent = "";
+  log.innerHTML = "";
+}
+
+// Enterキー対応
+document.addEventListener("keydown", e => {
+  if (e.key === "Enter" && !answer.disabled) check();
+});
+</script>
+
+</body>
+</html>
